@@ -1,0 +1,7 @@
+ultralytics==8.0.0
+transformers==4.30.0
+fastapi==0.100.0
+uvicorn==0.22.0
+python-multipart==0.0.6
+Pillow==9.5.0
+wikipedia==1.4.0

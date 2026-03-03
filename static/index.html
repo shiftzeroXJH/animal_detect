@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>野生动物智能检测系统 (Demo)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            min-height: 100vh;
+        }
+        
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        .upload-area {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area.drag-over {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: #22c55e;
+            transform: scale(1.02);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(22, 163, 74, 0.3);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(22, 163, 74, 0.5);
+        }
+        
+        /* Progress bar animation */
+        .progress-bar-fill {
+            transition: width 1s ease-out;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased p-4 md:p-8 flex flex-col justify-center items-center">
+
+    <!-- Header -->
+    <header class="w-full max-w-6xl mx-auto mb-8 text-center animate-fade-in-down">
+        <h1 class="text-4xl md:text-5xl font-bold text-brand-900 tracking-tight mb-2 drop-shadow-sm">
+            <i class="fa-solid fa-leaf text-brand-500 mr-2"></i>野生动物智能识别
+        </h1>
+        <p class="text-brand-700 text-lg md:text-xl max-w-2xl mx-auto opacity-80">
+            基于 MegaDetector 与 ConvNeXt 的两阶段目标检测及精细分类系统
+        </p>
+    </header>
+
+    <!-- Main Container -->
+    <main class="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: Upload & Canvas -->
+        <div class="lg:col-span-7 space-y-6">
+            
+            <!-- Upload Box -->
+            <div id="uploadBox" class="glass-panel rounded-3xl p-8 border-2 border-dashed border-brand-500/50 flex flex-col items-center justify-center min-h-[400px] upload-area relative overflow-hidden group hover:shadow-xl transition-all">
+                
+                <input type="file" id="fileInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*">
+                
+                <div id="uploadContent" class="text-center z-0 transition-opacity duration-300">
+                    <div class="w-24 h-24 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 group-hover:bg-brand-500 transition-all duration-300 shadow-inner">
+                        <i class="fa-solid fa-cloud-arrow-up text-4xl text-brand-500 group-hover:text-white transition-colors duration-300"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">拖拽图片到这里，或点击上传</h3>
+                    <p class="text-sm text-gray-500">支持 JPG, PNG, WEBP (开启 EXIF 检测 GPS信息)</p>
+                </div>
+
+                <!-- Preview Canvas Container (Hidden initially) -->
+                <div id="previewContainer" class="absolute inset-0 w-full h-full p-4 bg-white/50 backdrop-blur-sm hidden z-20 flex items-center justify-center rounded-3xl">
+                    <canvas id="imageCanvas" class="max-w-full max-h-full rounded-2xl shadow-lg object-contain"></canvas>
+                    
+                    <!-- Reset Button -->
+                    <button id="resetBtn" class="absolute top-6 right-6 bg-white/80 hover:bg-white text-gray-700 p-3 rounded-full shadow-md backdrop-blur-md transition-all hover:scale-105 hover:text-red-500 z-30">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                    
+                    <!-- Processing Overlay -->
+                    <div id="processingOverlay" class="absolute inset-0 bg-white/60 backdrop-blur-md z-40 hidden flex-col items-center justify-center rounded-3xl">
+                        <i class="fa-solid fa-circle-notch fa-spin text-5xl text-brand-500 mb-4"></i>
+                        <p class="text-lg font-medium text-brand-700 animate-pulse">正在进行深度分析...</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Right Column: Results Dashboard -->
+        <div class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Top Predictions Card -->
+            <div class="glass-panel rounded-3xl p-6 shadow-lg relative overflow-hidden h-full flex flex-col">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-400 to-brand-600"></div>
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class="fa-solid fa-chart-pie text-brand-500 mr-3"></i>分类结果 (Top-3)
+                </h3>
+                
+                <div id="predictionsContainer" class="flex-grow flex flex-col justify-center space-y-5">
+                    <!-- Placeholder State -->
+                    <div class="text-center text-gray-400 py-8" id="predPlaceholder">
+                        <i class="fa-solid fa-magnifying-glass-chart text-4xl opacity-50 mb-3"></i>
+                        <p>上传图片以查看推理结果</p>
+                    </div>
+                    <!-- Template for progress bars (injected by JS) -->
+                </div>
+            </div>
+
+            <!-- Species Info Card -->
+            <div class="glass-panel rounded-3xl p-6 shadow-lg relative overflow-hidden transform transition-all">
+                <div class="absolute top-0 left-0 w-1 h-full bg-brand-500"></div>
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <i class="fa-solid fa-book-open text-brand-500 mr-3"></i>物种百科
+                </h3>
+                
+                <div id="speciesContent" class="min-h-[120px]">
+                    <div class="text-center text-gray-400 py-6" id="speciesPlaceholder">
+                        等待物种识别...
+                    </div>
+                    <!-- Info Template -->
+                    <div id="speciesResult" class="hidden">
+                        <h4 id="spTitle" class="text-lg font-bold text-brand-700 mb-2 pb-2 border-b border-gray-200"></h4>
+                        <p id="spSummary" class="text-sm text-gray-600 leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXIF/GPS Card -->
+            <div class="glass-panel rounded-3xl p-6 shadow-lg flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 flex-shrink-0">
+                    <i class="fa-solid fa-map-location-dot text-xl"></i>
+                </div>
+                <div class="flex-grow">
+                    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1">位置信息 (EXIF)</h4>
+                    <div id="gpsContent" class="text-gray-800 font-medium">无数据</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- UI Scripts -->
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadBox = document.getElementById('uploadBox');
+        const uploadContent = document.getElementById('uploadContent');
+        const previewContainer = document.getElementById('previewContainer');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const resetBtn = document.getElementById('resetBtn');
+        const processingOverlay = document.getElementById('processingOverlay');
+        
+        const predsContainer = document.getElementById('predictionsContainer');
+        const predPlaceholder = document.getElementById('predPlaceholder');
+        
+        const speciesResult = document.getElementById('speciesResult');
+        const speciesPlaceholder = document.getElementById('speciesPlaceholder');
+        const spTitle = document.getElementById('spTitle');
+        const spSummary = document.getElementById('spSummary');
+        
+        const gpsContent = document.getElementById('gpsContent');
+
+        let originalImage = null;
+
+        // Drag & Drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadBox.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadBox.addEventListener(eventName, () => uploadBox.classList.add('drag-over'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadBox.addEventListener(eventName, () => uploadBox.classList.remove('drag-over'), false);
+        });
+
+        uploadBox.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleDrop(e) {
+            let dt = e.dataTransfer;
+            let files = dt.files;
+            fileInput.files = files; // Sync input
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            if (!files.length) return;
+            const file = files[0];
+            
+            if (!file.type.startsWith('image/')) {
+                alert('请上传图片文件!');
+                return;
+            }
+
+            // UI changes
+            uploadContent.classList.add('hidden');
+            previewContainer.classList.remove('hidden');
+            processingOverlay.classList.remove('hidden');
+            fileInput.disabled = true;
+
+            // Load to Image object for canvas
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    drawImageOnCanvas(img);
+                    // Send API Request
+                    submitToAPI(file);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function drawImageOnCanvas(img, boxes = []) {
+            const ctx = imageCanvas.getContext('2d');
+            
+            // Set canvas size matching image intrinsic size for high quality rendering
+            imageCanvas.width = img.width;
+            imageCanvas.height = img.height;
+            
+            // Draw image
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+            
+            // Draw boxes
+            if (boxes && boxes.length > 0) {
+                boxes.forEach(box => {
+                    const { x1, y1, x2, y2, confidence, class_id } = box;
+                    const w = x2 - x1;
+                    const h = y2 - y1;
+                    
+                    // Box Style
+                    ctx.strokeStyle = '#22c55e'; // Brand green
+                    ctx.lineWidth = Math.max(3, img.width / 200);
+                    ctx.beginPath();
+                    ctx.roundRect(x1, y1, w, h, 8); // rounded corners depending on browser support
+                    ctx.stroke();
+                    
+                    // Overlay semi-transparent fill
+                    ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+                    ctx.fill();
+                    
+                    // Label background
+                    const label = `${(confidence * 100).toFixed(1)}%`;
+                    ctx.font = `bold ${Math.max(16, img.width / 40)}px Inter`;
+                    const textMetrics = ctx.measureText(label);
+                    const padding = 10;
+                    const textHeight = parseInt(ctx.font, 10);
+                    
+                    ctx.fillStyle = '#22c55e';
+                    ctx.beginPath();
+                    ctx.roundRect(x1, y1 - textHeight - padding*2, textMetrics.width + padding*2, textHeight + padding*2, [8, 8, 0, 0]);
+                    ctx.fill();
+                    
+                    // Label text
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(label, x1 + padding, y1 - padding);
+                });
+            }
+        }
+
+        async function submitToAPI(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                // Assuming local development API URL
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                processingOverlay.classList.add('hidden');
+                
+                if (data.success) {
+                    // 1. Redraw Canvas with Boxes
+                    drawImageOnCanvas(originalImage, data.boxes);
+                    
+                    // 2. Update Top-3 Predictions
+                    updatePredictionsUI(data.top_predictions);
+                    
+                    // 3. Update GPS
+                    if (data.gps) {
+                        gpsContent.innerHTML = `<span class="text-blue-600"><i class="fa-solid fa-location-dot mr-1"></i> ${data.gps.latitude}, ${data.gps.longitude}</span>`;
+                    } else {
+                        gpsContent.innerHTML = `<span>未检测到 EXIF 定位</span>`;
+                    }
+                    
+                    // 4. Update Species Info
+                    if (data.species_info) {
+                        speciesPlaceholder.classList.add('hidden');
+                        speciesResult.classList.remove('hidden');
+                        spTitle.innerText = data.species_info.title || data.top_predictions[0].label;
+                        spSummary.innerText = data.species_info.summary || '暂无详细介绍。';
+                    }
+                    
+                } else {
+                    alert('预测出错: ' + data.error);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('服务请求失败，请确保后端服务正常运行。');
+                processingOverlay.classList.add('hidden');
+            }
+        }
+
+        function updatePredictionsUI(predictions) {
+            predPlaceholder.classList.add('hidden');
+            // Clear existing
+            const existingBars = predsContainer.querySelectorAll('.pred-row');
+            existingBars.forEach(el => el.remove());
+            
+            if (!predictions || predictions.length === 0) {
+                predPlaceholder.classList.remove('hidden');
+                predPlaceholder.innerHTML = '<p class="text-red-500">未检测到目标</p>';
+                return;
+            }
+
+            predictions.forEach((pred, index) => {
+                // Colors based on rank
+                const colors = ['bg-brand-500', 'bg-blue-400', 'bg-gray-400'];
+                const barColor = colors[index] || 'bg-gray-300';
+                
+                const row = document.createElement('div');
+                row.className = 'pred-row w-full animate-fade-in-up';
+                row.style.animationDelay = `${index * 150}ms`;
+                
+                row.innerHTML = `
+                    <div class="flex justify-between items-end mb-1">
+                        <span class="text-sm font-semibold text-gray-700">#${index+1} ${pred.label}</span>
+                        <span class="text-sm font-bold ${index === 0 ? 'text-brand-600' : 'text-gray-500'}">${pred.confidence}%</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                        <div class="${barColor} h-2.5 rounded-full progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                `;
+                predsContainer.appendChild(row);
+                
+                // Trigger animation in next frame
+                setTimeout(() => {
+                    const bar = row.querySelector('.progress-bar-fill');
+                    bar.style.width = `${pred.confidence}%`;
+                }, 50);
+            });
+        }
+
+        resetBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Reset UI
+            fileInput.value = '';
+            fileInput.disabled = false;
+            
+            previewContainer.classList.add('hidden');
+            uploadContent.classList.remove('hidden');
+            
+            // Reset right panel
+            const existingBars = predsContainer.querySelectorAll('.pred-row');
+            existingBars.forEach(el => el.remove());
+            predPlaceholder.classList.remove('hidden');
+            predPlaceholder.innerHTML = `<i class="fa-solid fa-magnifying-glass-chart text-4xl opacity-50 mb-3"></i><p>上传图片以查看推理结果</p>`;
+            
+            speciesResult.classList.add('hidden');
+            speciesPlaceholder.classList.remove('hidden');
+            
+            gpsContent.innerHTML = '无数据';
+            
+            originalImage = null;
+        });
+
+    </script>
+</body>
+</html>
